@@ -1,0 +1,135 @@
+{
+  "_comment": "Every OSC address TouchFree sends on the Body Data Stream. Generated from edge/body_detector.LANDMARK_NAMES; do not hand-edit. One float per address, always. Everything is a float, flags included.",
+  "schema": "touchfree-osc-1",
+  "transport": {
+    "protocol": "OSC 1.0 over UDP",
+    "rate_hz": 30,
+    "rate_hz_with_hand_landmarks": 25,
+    "bundling": "packed into bundles under 1472 bytes so nothing fragments"
+  },
+  "presence": {
+    "/touchfree/person": {
+      "units": "flag",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "note": "1.0 while a person is tracked. Gate everything on this."
+    }
+  },
+  "screen_2d": {
+    "_note": "Mirrored screen space, already normalised. +x right, +y DOWN, so invert y whenever 'up' should mean 'more'. Needs Body landmarks on.",
+    "/touchfree/2d/<joint>/x": {
+      "units": "fraction of frame width",
+      "range": [
+        0.0,
+        1.0
+      ]
+    },
+    "/touchfree/2d/<joint>/y": {
+      "units": "fraction of frame height",
+      "range": [
+        0.0,
+        1.0
+      ]
+    },
+    "/touchfree/2d/<joint>/vis": {
+      "units": "confidence",
+      "range": [
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "metric_3d": {
+    "_note": "Metres, not mirrored, anatomical. +x the body's own right, +y up, +z the way it faces. Needs Body 3D metric on as well.",
+    "/touchfree/3d/valid": {
+      "units": "flag",
+      "range": [
+        0.0,
+        1.0
+      ],
+      "note": "gate the rest of /3d on this"
+    },
+    "/touchfree/3d/position/x|y|z": {
+      "units": "metres",
+      "note": "hip midpoint"
+    },
+    "/touchfree/3d/rotation/x|y|z": {
+      "units": "degrees",
+      "note": "can flip to the mirror-image answer; prefer position"
+    },
+    "/touchfree/3d/distance": {
+      "units": "metres",
+      "note": "from the camera"
+    },
+    "/touchfree/3d/quality": {
+      "units": "pixels",
+      "note": "solve residual, lower is better"
+    },
+    "/touchfree/3d/<joint>/x|y|z": {
+      "units": "metres"
+    },
+    "/touchfree/3d/<joint>/vis": {
+      "units": "confidence",
+      "range": [
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "hands": {
+    "_note": "21 points per hand from a dedicated hand model. Needs Hand landmarks on.",
+    "/touchfree/hand/left/<0-20>/x|y": {
+      "units": "fraction of frame",
+      "range": [
+        0.0,
+        1.0
+      ]
+    },
+    "/touchfree/hand/right/<0-20>/x|y": {
+      "units": "fraction of frame",
+      "range": [
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "silence_means_unseen": "A joint the camera could not see is NOT sent: its x, y, z and vis all stop together. Hold your last value, and use a timeout on the address rather than watching vis, which stops too. Gate the whole mapping on /touchfree/person.",
+  "joints": [
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
+    "left_eye_inner",
+    "left_eye_outer",
+    "right_eye_inner",
+    "right_eye_outer",
+    "mouth_left",
+    "mouth_right",
+    "left_pinky",
+    "right_pinky",
+    "left_index",
+    "right_index",
+    "left_thumb",
+    "right_thumb",
+    "left_heel",
+    "right_heel",
+    "left_foot_index",
+    "right_foot_index"
+  ],
+  "joint_note": "The first 17 are the standard COCO body set. The rest add face detail, hands and feet."
+}
