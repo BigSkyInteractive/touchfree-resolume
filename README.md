@@ -219,22 +219,31 @@ A layer fades up when somebody walks over. The attract-loop handoff, done in Res
 
 ## Known limits, read before building a show on this
 
-**Landmarks are sent even when the camera could not see them.** TouchFree's pose model
-returns all 33 points every frame and estimates the ones outside the picture. On the
-WebSocket path those estimates are withheld; **on the OSC stream, as of this writing,
-they are not.** So an address for a joint that has left the frame keeps moving, on a
-guess, with several times the jitter of a tracked joint. Screen fractions can also go
-slightly outside 0 to 1 for the same reason.
+**A joint the camera cannot see stops sending, it does not send a guess.** The pose
+model returns all 33 points every frame and estimates the ones outside the picture, but
+those estimates are withheld rather than published. When someone's hand leaves the top
+of frame, `/touchfree/2d/right_wrist/x`, `/y` and `/vis` all go quiet together, and your
+receiver holds the last value it got. That is the OSC convention and it is what you
+want: an estimate of an unseen joint moves 6 to 8 times as far per frame as a tracked
+one, and driving a parameter from it looks broken.
 
-Until that changes, build every mapping to defend itself:
+Two consequences for a patch:
 
-- Gate on `/touchfree/person`
-- Gate each joint on its own `/touchfree/2d/<joint>/vis` or `/touchfree/3d/<joint>/vis`,
-  and hold the last good value when confidence drops
-- Clamp every output to 0 to 1 in the patch
+- **Watch for silence, not for a flag.** `vis` stops arriving along with the position,
+  so it cannot tell you the joint has gone. Use a timeout on the address itself, and
+  gate the whole mapping on `/touchfree/person`.
+- **Values stay inside 0 to 1**, because a landmark outside the picture is exactly what
+  gets withheld. Clamp anyway; it costs nothing.
 
-This matters most for hand height and arm spread, where the joints leave frame often.
-Distance is unaffected, because it is gated by `/touchfree/3d/valid`.
+This matters most for hand height and arm spread, where joints leave frame often.
+Distance is unaffected, being gated by `/touchfree/3d/valid`.
+
+Measured on a real take, a person framed from the chest up had 16 of 33 landmarks
+withheld, both wrists among them.
+
+> Fixed 2026-08-17. Builds before that published the estimates on OSC, with screen
+> fractions running past 1.0. If you are on an older build, clamp in the patch and gate
+> each joint on its own `vis`, which did keep arriving there.
 
 **`+y` runs down** on the 2D family. Screen convention, not a mistake. Invert it
 whenever "up" should mean "more".
@@ -260,7 +269,7 @@ or playhead, and narrow the range you are driving rather than fighting the data.
 | 2D addresses arrive, 3D ones do not | Body 3D off | Control page, switch **Body 3D, metric** on |
 | Messages arrive, nothing moves | The address is not a Resolume address | Arena only acts on its own addresses. A Wire patch has to read TouchFree's and write Resolume's |
 | Parameter pinned at maximum | Metres or degrees sent into a 0 to 1 parameter | Remap and clamp in the patch |
-| Values jump when someone reaches off screen | Out-of-frame estimate, see Known limits | Gate on `vis` and hold the last good value |
+| A mapping freezes when someone reaches off screen | The joint left the frame, so its address stopped | Working as intended. Gate on `/touchfree/person` and ease toward a rest value on a timeout |
 | Works, then stops | Tracking lost the person | Check Camera Setup |
 
 If messages appear in Resolume's window, the network is fine and the problem is the
