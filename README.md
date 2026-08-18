@@ -1,289 +1,140 @@
-# TouchFree to Resolume
+# TouchFree to Resolume: a working document
 
-Drive Resolume Arena or Avenue from body movement. TouchFree tracks the person and
-streams the skeleton over OSC; a Resolume Wire patch turns that into parameter
-movement.
+We build [TouchFree](https://bigskyinteractive.com), a camera-based body
+tracker. It streams a person's skeleton over OSC at about 30 updates a second.
 
-Every TouchFree address in this document was read from the sender source, not from
-memory. Resolume behaviour is from Resolume's own documentation.
+We want that to drive Resolume Arena and Avenue well. **We are not Resolume
+experts, and this repository is us saying so in public.** It is a working
+document, not a finished integration, and it is open because we would rather
+be corrected early than ship something confidently wrong.
 
----
-
-## Read this first: why a Wire patch, and not just OSC
-
-Resolume's OSC input listens **only on Resolume's own fixed addresses**. There is no
-learn mode and no way to point an incoming address at a parameter. From Resolume's
-documentation: "The addresses are all fixed and set up already."
-
-So sending `/touchfree/2d/right_wrist/y` straight at Arena does nothing at all. It is
-not a range problem or a units problem. Arena has nowhere to put it.
-
-**Resolume Wire is the piece that closes the gap.** Its `OSC In` node feeding a
-`Read OSC` node takes an address you type in, so it can read TouchFree's stream
-directly. And a patch running inside Arena uses the host's own OSC settings: "When you
-have your patch loaded in a host like Arena or Avenue, the Midi and OSC inputs and
-outputs you have in the patch will use the host and its settings for communicating."
-
-**A compiled Wire patch runs in Arena and Avenue with no Wire licence and no
-watermark.** You only need Wire if you want to open the patch and change it.
+If you know Resolume, the things we most need are in
+**[QUESTIONS.md](QUESTIONS.md)**. Seven of them, numbered so you can answer one
+and ignore the rest.
 
 ---
 
-## Status of this repository
+## How to read the claims in here
 
-| Piece | State |
+Everything in this repository is tagged, because the two halves of this problem
+are known to very different standards.
+
+| Tag | Means |
 |---|---|
-| This guide, and the address reference below | Complete, checked against the TouchFree sender source |
-| Compiled `.wire` patches for the five mappings | **Not yet published** |
+| **Verified** | We read it in our own source, or measured it. Trust it, and tell us if it is wrong anyway |
+| **Documented** | Quoted from Resolume's own documentation. We have not run it |
+| **Assumption** | We guessed. It may be wrong. This is what we are asking about |
 
-The patches are being built and tested against real hardware before release. Until
-they land, this document is enough to build your own in Wire, and the mapping
-sections below spell out the maths each one needs.
-
----
-
-## What you need
-
-- Resolume Arena or Avenue 7
-- TouchFree Desktop, with a camera working and Camera Setup showing green
-- Both on the same machine, or on the same network
-- Resolume Wire only if you want to author or edit patches
+The TouchFree half is Verified. Most of the Resolume half is Documented and
+some of it is Assumption. Nothing in here has been run against Resolume by us.
 
 ---
 
-## Step 1: Turn on OSC input in Resolume
+## What we are trying to build
 
-Preferences, then the OSC tab. Enable OSC Input and note the port.
+Five installation gestures, in plain language:
 
-Keep the message window in that panel open while you set up. It shows the last 200
-messages received and it is the fastest way to tell a network problem from a mapping
-problem.
+1. Raise a hand, an effect intensifies
+2. Walk across the room, a clip scrubs or a layer moves
+3. Step closer, the visuals sharpen or brighten
+4. Spread your arms, the composition scales
+5. Someone walks up, a layer fades in
 
-## Step 2: Point TouchFree at Resolume
+None of these are exotic. We expect a Resolume operator has done all five with
+other input sources and knows the sane way to wire them.
 
-In TouchFree, open **Output**, switch on **Body Data Stream (OSC)** and set:
+---
 
-- Destination: `127.0.0.1` on one machine, otherwise Resolume's IP address
-- Port: whatever you set in Resolume
-- **2D screen positions** on for anything driven by where a joint is on screen
-- **3D metric positions** on for anything driven by real distance in metres
+## The problem as we understand it
 
-There is no network discovery in TouchFree. Type the address.
+**Documented.** Resolume's OSC input listens on Resolume's own fixed addresses.
+Its documentation says "The addresses are all fixed and set up already", and we
+found no learn mode for an incoming address. So `/touchfree/2d/right_wrist/y`
+appears to have nowhere to go in Arena.
 
-On the **Control** page, **Body landmarks** must be on or nothing is sent at all. The
-`/touchfree/3d/*` family additionally needs **Body 3D, metric** on; while it is off,
-`/touchfree/3d/valid` reads 0 and the per-joint 3D addresses are absent.
+**If that is wrong, please say so first**, because everything below is built on
+it and a simpler route would be very welcome.
 
-Stand in front of the camera and watch Resolume's message window. TouchFree addresses
-should appear. If they do not, see Troubleshooting.
+**Documented.** Resolume Wire looks like the bridge. Its `OSC In` node feeding
+a `Read OSC` node takes an address you type in, and Resolume's documentation
+says a patch loaded in a host "will use the host and its settings for
+communicating".
 
-## Step 3: Load the patch
-
-Drop the compiled patch into your Resolume effects folder and add it to a layer or
-clip like any other effect. Its parameters appear in Arena's own interface.
+**Assumption, and the one we would most like checked.** We believe a *compiled*
+Wire patch runs in Arena and Avenue with no Wire licence and no watermark,
+which is what would make this free for anyone downloading it. Our source for
+that is a forum summary we could not open directly. If it is wrong, this whole
+approach costs every user EUR 399 and we should be doing something else.
 
 ---
 
 ## What TouchFree sends
 
-One float per address, always. No message ever carries more than one argument, so
-every address is one channel everywhere.
+**Verified.** All of this was read out of our sender source, and
+[addresses.json](addresses.json) is generated from it so it cannot drift.
 
-**Everything is a float**, including the flags. Nothing here is an integer.
+One float per address, always. Everything is a float, flags included. About 30
+updates a second, 25 with hand tracking on, packed into bundles under 1472
+bytes so nothing fragments.
 
 | Address | Value |
 |---|---|
-| `/touchfree/person` | `1.0` while a person is tracked, `0.0` otherwise |
-| `/touchfree/2d/<joint>/x` `/y` | **0 to 1** across the picture, mirrored. `+x` right, **`+y` down** |
+| `/touchfree/person` | `1.0` while a person is tracked |
+| `/touchfree/2d/<joint>/x` `/y` | **already 0 to 1** across the picture, mirrored. `+x` right, **`+y` down** |
 | `/touchfree/2d/<joint>/vis` | tracker confidence, 0 to 1 |
 | `/touchfree/hand/left/<0-20>/x` `/y` | 21 hand points, 0 to 1, mirrored |
 | `/touchfree/hand/right/<0-20>/x` `/y` | the same for the other hand |
-| `/touchfree/3d/valid` | `1.0` when the 3D solve is good. Gate the rest of `/3d` on it |
-| `/touchfree/3d/position/x` `/y` `/z` | hip midpoint in **metres** |
-| `/touchfree/3d/rotation/x` `/y` `/z` | body orientation in **degrees** |
+| `/touchfree/3d/valid` | `1.0` when the metric solve is good |
+| `/touchfree/3d/position/x` `/y` `/z` | hip midpoint, **metres** |
+| `/touchfree/3d/rotation/x` `/y` `/z` | body orientation, **degrees** |
 | `/touchfree/3d/distance` | **metres** from the camera |
-| `/touchfree/3d/quality` | solve fit residual in pixels, lower is better |
-| `/touchfree/3d/<joint>/x` `/y` `/z` | per-joint position in **metres** |
+| `/touchfree/3d/<joint>/x` `/y` `/z` | per-joint position, **metres** |
 | `/touchfree/3d/<joint>/vis` | confidence, 0 to 1 |
 
-Note what this means for mapping work: **the 2D family is already normalised 0 to 1.**
-It needs no conversion, only a useful range picked out of it. The `/3d` family is in
-metres and degrees and does need converting.
+Two things that catch people:
 
-### Joint names
+**The 2D family is already normalised.** It is not pixels. If you have read
+anywhere that TouchFree sends screen pixels, that was us being wrong in a draft.
 
-The `<joint>` above. 33 of them, the first 17 being the standard COCO set.
+**`+y` runs down**, screen convention. Invert it whenever up should mean more.
 
-```
-nose              left_eye          right_eye         left_ear
-right_ear         left_shoulder     right_shoulder    left_elbow
-right_elbow       left_wrist        right_wrist       left_hip
-right_hip         left_knee         right_knee        left_ankle
-right_ankle       left_eye_inner    left_eye_outer    right_eye_inner
-right_eye_outer   mouth_left        mouth_right       left_pinky
-right_pinky       left_index        right_index       left_thumb
-right_thumb       left_heel         right_heel        left_foot_index
-right_foot_index
-```
+**A joint the camera cannot see is not sent.** Its `x`, `y`, `z` and `vis` all
+stop together and your receiver holds its last value. So watch for an address
+going quiet, not for a flag: `vis` stops too. Gate on `/touchfree/person`.
+
+The 33 joint names are in [addresses.json](addresses.json). The first 17 are
+the standard COCO set.
 
 ---
 
-## What Resolume expects
+## Where we have got to
 
-**Floats between 0.0 and 1.0**, mapped across the parameter's real range. Two examples
-from Resolume's own documentation:
+- **[QUESTIONS.md](QUESTIONS.md)** is the ask. Start there.
+- **[MAPPINGS.md](MAPPINGS.md)** is our first attempt at the five mappings,
+  written as arithmetic rather than as nodes. **The numbers in it are
+  uncalibrated and were chosen at a desk**, not measured in a room. Treat them
+  as a shape to argue with.
+- **[addresses.json](addresses.json)** is the address reference, generated from
+  our source.
 
-- `/composition/video/effects/transform/scale` takes 0.0 to 1.0, meaning 0% to 1000%
-- `/composition/video/effects/transform/rotationz` takes 0.0 to 1.0, meaning -180 to +180 degrees
+There are no Wire patches yet. We did not want to build them on top of
+assumptions we had not checked.
 
-So `0.5` is the middle of the parameter, not the number 0.5.
+## How to help
 
-Because Resolume normalises across each parameter's own range, a patch only has to
-decide **its own** range. You never need to know a parameter's real units.
+Open an issue. Answering a single numbered question in QUESTIONS.md is worth
+more to us than a full solution, and "you have this backwards" is worth most of
+all. If you have built something like this and want to say how you did it, that
+is exactly the thing we are missing.
 
-**To find an address:** Shortcuts, then Edit OSC, then click the control. The address
-appears and can be copied. Do not type one from memory.
-
-**Absolute and relative forms.** Sending the string `"a"` as the first argument sets an
-absolute value, `/composition/layers/1/clips/1/video/effects/transform/positionx "a" 320`.
-`"+"`, `"-"` and `"*"` add, subtract and multiply against the current value. These are
-available inside a Wire patch's `Write OSC` node; TouchFree itself only ever sends a
-single float per address.
-
-**Absolute versus selected.** `/composition/layers/1/...` always targets layer 1;
-`/composition/selectedlayer/...` follows whatever the operator has selected. Prefer the
-absolute form for anything running unattended.
+We will keep this document updated as answers come in, and mark what changed.
 
 ---
 
-## Five mappings
+MIT, see [LICENSE](LICENSE). TouchFree is made by
+[Big Sky Interactive](https://bigskyinteractive.com).
 
-Each one lists the TouchFree address to read, what the patch does with it, and where it
-goes in Resolume. Confirm every Resolume address with Shortcuts, Edit OSC before wiring
-it.
-
-### Raise a hand to intensify an effect
-
-- **Read** `/touchfree/2d/right_wrist/y`
-- **Patch** invert it, because `+y` runs **down**, so a raised hand is a *smaller*
-  number. Then remap your chosen band of the frame to 0 to 1 and clamp. Using the whole
-  frame height wastes most of the travel on ceiling and floor; a band from roughly head
-  height to waist height gives a usable throw.
-- **Send** the effect's amount parameter, or drive the effect inside the patch itself
-
-The most legible mapping for an audience, because cause and effect are obvious.
-
-### Walk across the room to scrub a clip
-
-- **Read** `/touchfree/2d/left_hip/x`
-- **Patch** remap and clamp. Invert if the direction feels backwards; the stream is
-  mirrored, so which way is which depends on how the camera is mounted. This value is
-  already 0 to 1 across the camera's view, which is naturally "the room as framed", so
-  it often needs nothing but a clamp.
-- **Send** `/composition/layers/1/clips/1/transport/position`
-
-The floor becomes a timeline. Strong for installations.
-
-### Step closer to bring visuals into focus
-
-- **Read** `/touchfree/3d/distance`, in metres
-- **Patch** remap your working range to 0 to 1 and clamp. A near of 0.5 m and a far of
-  4.0 m is a sensible starting point. Invert so closer means sharper.
-- **Send** a blur effect's amount, or `/composition/layers/1/video/opacity`
-
-Gate this on `/touchfree/3d/valid`, and remember it needs **Body 3D, metric** on.
-
-### Spread arms to scale the composition
-
-- **Read** `/touchfree/3d/left_wrist/x` `/y` `/z` and `/touchfree/3d/right_wrist/x` `/y` `/z`
-- **Patch** the Euclidean distance between the two points, then remap and clamp. There
-  is no wrist-to-wrist address; the patch computes it.
-- **Send** `/composition/video/effects/transform/scale`
-
-**Use the 3D wrists, not the 2D ones.** A 2D spread shrinks as the person walks
-backwards, so the same pose would zoom differently at two distances. The 3D wrists are
-in metres and hold their meaning at any distance.
-
-Scale runs to 1000%. Cap your output well below 1.0 until you have seen it on the real
-screen.
-
-### Presence to opacity
-
-- **Read** `/touchfree/person`
-- **Patch** nothing, it is already 0.0 or 1.0. Ease it, or the layer will snap.
-- **Send** `/composition/layers/2/video/opacity`
-
-A layer fades up when somebody walks over. The attract-loop handoff, done in Resolume.
-
----
-
-## Known limits, read before building a show on this
-
-**A joint the camera cannot see stops sending, it does not send a guess.** The pose
-model returns all 33 points every frame and estimates the ones outside the picture, but
-those estimates are withheld rather than published. When someone's hand leaves the top
-of frame, `/touchfree/2d/right_wrist/x`, `/y` and `/vis` all go quiet together, and your
-receiver holds the last value it got. That is the OSC convention and it is what you
-want: an estimate of an unseen joint moves 6 to 8 times as far per frame as a tracked
-one, and driving a parameter from it looks broken.
-
-Two consequences for a patch:
-
-- **Watch for silence, not for a flag.** `vis` stops arriving along with the position,
-  so it cannot tell you the joint has gone. Use a timeout on the address itself, and
-  gate the whole mapping on `/touchfree/person`.
-- **Values stay inside 0 to 1**, because a landmark outside the picture is exactly what
-  gets withheld. Clamp anyway; it costs nothing.
-
-This matters most for hand height and arm spread, where joints leave frame often.
-Distance is unaffected, being gated by `/touchfree/3d/valid`.
-
-Measured on a real take, a person framed from the chest up had 16 of 33 landmarks
-withheld, both wrists among them.
-
-> Fixed 2026-08-17. Builds before that published the estimates on OSC, with screen
-> fractions running past 1.0. If you are on an older build, clamp in the patch and gate
-> each joint on its own `vis`, which did keep arriving there.
-
-**`+y` runs down** on the 2D family. Screen convention, not a mistake. Invert it
-whenever "up" should mean "more".
-
-**Body rotation can flip.** `/touchfree/3d/rotation/*` is solved from a nearly flat set
-of points and can occasionally jump to the mirror-image answer, reading as if the person
-spun around. Position and distance do not have this problem. Prefer them.
-
-**Smoothing.** TouchFree filters its landmarks before sending, so the stream is already
-calm. Resolume applies no filtering of its own. If a mapping still looks nervous, map it
-to a slow parameter such as opacity or scale before trying a fast one such as position
-or playhead, and narrow the range you are driving rather than fighting the data.
-
----
-
-## Troubleshooting
-
-| Problem | Cause | Fix |
-|---|---|---|
-| Nothing in Resolume's message window | Firewall blocking UDP | Allow inbound UDP on the OSC port |
-| Nothing, both apps on one machine | Wrong destination | Use `127.0.0.1`, not the LAN address |
-| Nothing, and the port is right | Body landmarks off | Control page, switch **Body landmarks** on |
-| 2D addresses arrive, 3D ones do not | Body 3D off | Control page, switch **Body 3D, metric** on |
-| Messages arrive, nothing moves | The address is not a Resolume address | Arena only acts on its own addresses. A Wire patch has to read TouchFree's and write Resolume's |
-| Parameter pinned at maximum | Metres or degrees sent into a 0 to 1 parameter | Remap and clamp in the patch |
-| A mapping freezes when someone reaches off screen | The joint left the frame, so its address stopped | Working as intended. Gate on `/touchfree/person` and ease toward a rest value on a timeout |
-| Works, then stops | Tracking lost the person | Check Camera Setup |
-
-If messages appear in Resolume's window, the network is fine and the problem is the
-address or the range. If they do not, it is the network or the firewall.
-
----
-
-## Licence
-
-MIT. See [LICENSE](LICENSE).
-
-TouchFree is made by [Big Sky Interactive](https://bigskyinteractive.com). This
-repository documents only what arrives on the wire and how to consume it.
-
-Related: [touchfree-receiver-kit](https://github.com/BigSkyInteractive/touchfree-receiver-kit),
+Our other public repositories, which document the same wire from other angles:
+[touchfree-receiver-kit](https://github.com/BigSkyInteractive/touchfree-receiver-kit),
 [touchfree-fluid-body](https://github.com/BigSkyInteractive/touchfree-fluid-body),
 [touchfree-puppet-2d](https://github.com/BigSkyInteractive/touchfree-puppet-2d).
